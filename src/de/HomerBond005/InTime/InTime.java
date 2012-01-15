@@ -1,12 +1,12 @@
 package de.HomerBond005.InTime;
 
 import java.io.File;
-import java.util.ArrayList;
 import java.util.Calendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.Map.Entry;
+import java.util.Set;
 
 import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
@@ -14,6 +14,8 @@ import org.bukkit.plugin.java.JavaPlugin;
 
 public class InTime extends JavaPlugin{
 	private Map<String, List<String>> plugins;
+	private Map<String, String[]> commands;
+	private int[] tasks = new int[2];
 	PluginManager pm;
 	private File mainDir = new File("plugins/InTime");
 	private File configfile = new File(mainDir + File.separator + "config.yml");
@@ -29,35 +31,60 @@ public class InTime extends JavaPlugin{
 		System.out.println("[InTime] is enabled!");
 		System.out.println("[InTime]: Current time: " + t(hours()) + ":" + t(minutes()));
 		reload();
+		System.out.println();
 		getServer().getScheduler().scheduleAsyncDelayedTask(this, new Runnable(){
 			public void run(){
 				initPlugins(hours(), minutes());
 			}
 		});
-		getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+		tasks[0] = getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
 		    public void run() {
 		        managePlugins(hours(), minutes());
 		    }
 		}, 60L, 600L);
+		tasks[1] = getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
+		    public void run() {
+		        manageCommands(hours(), minutes());
+		    }
+		}, 60L, 1200L);
 	}
 	public void onDisable(){
+		for(int task : tasks){
+			getServer().getScheduler().cancelTask(task);
+		}
+		getServer().getScheduler().cancelTasks(this);
 		System.out.println("[InTime] is disabled!");
 	}
-	@SuppressWarnings({ "unchecked", "rawtypes" })
+	@SuppressWarnings("unchecked")
 	private void reload(){
-		List<String> pluginnames = new ArrayList();
-		for(String line : this.getConfig().saveToString().split("\n")){
-			if(line.substring(0, 2).equals("  ") && !line.substring(2, 4).equals("  ")){
-				pluginnames.add(line.trim().replaceAll(":", "").toString());
-			}
-		}
+		//PLUGINS
+		Set<String> pluginnames = this.getConfig().getConfigurationSection("plugins").getKeys(false);
 		plugins = new HashMap<String, List<String>>();
 		for(String plugin : pluginnames){
-			if(this.getConfig().contains("plugins." + plugin + ".enableTimes")){
-				plugins.put(plugin + ".enable", this.getConfig().getList("plugins." + plugin + ".enableTimes"));
-			}else if(this.getConfig().contains("plugins." + plugin + ".disableTimes")){
-				plugins.put(plugin + ".disable", this.getConfig().getList("plugins." + plugin + ".disableTimes"));
+			if(this.getConfig().getString("plugins." + plugin + ".type").equals("enable")){
+				plugins.put(plugin + ".enable", this.getConfig().getList("plugins." + plugin + ".times"));
+			}else if(this.getConfig().getString("plugins." + plugin + ".type").equals("disable")){
+				plugins.put(plugin + ".disable", this.getConfig().getList("plugins." + plugin + ".times"));
 			}
+		}
+		//COMMANDS
+		commands = new HashMap<String, String[]>();
+		Set<String> commandnames = this.getConfig().getConfigurationSection("commands").getKeys(false);
+		for(String command : commandnames){
+			String[] value = {this.getConfig().getString("commands." + command + ".command"), this.getConfig().getString("commands." + command + ".arguments", ""), this.getConfig().getString("commands." + command + ".time")};
+			commands.put(command, value);
+		}
+	}
+	//COMMANDMANAGEMENT
+	private void manageCommands(int hours, int minutes){
+		for(Entry<String, String[]> command : commands.entrySet()){
+			handleCommand(command.getValue()[0], command.getValue()[1], command.getValue()[2], hours, minutes);
+		}
+	}
+	private void handleCommand(String name, String arguments, String time, int acthours, int actminutes){
+		if(time.equals(t(acthours) + ":" + t(actminutes))){
+			System.out.println("[InTime]: Executing the following: '" + name + " " + arguments + "'.");
+			getServer().dispatchCommand(getServer().getConsoleSender(), name + " " + arguments);
 		}
 	}
 	//PLUGINMANAGEMENT

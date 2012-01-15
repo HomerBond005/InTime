@@ -1,26 +1,39 @@
 # InTime
 # Timebased plugin disabling
 # by HomerBond005
-
+# 
 # HowTo configure this: (example)
 # plugins:
 #   (yourplugin):
-#     (enableTimes/disableTimes):
+#     type: enable/disable
+#     times:
 #     - (starttime)-(endtime)
 #     - (anotherStartTime)-(anotherEndTime)
 #   samplePlugin:
-#     disableTimes:
+#     type: enable
+#     times:
 #     - 9:00-15:30
-
-# ---enableTimes/disableTimes---:
+# 
+# ---enable/disable---:
 # only one these is possible!
-#    enableTimes  -> plugin is disabled and will be enabled  between the times
-#    disableTimes -> plugin is enabled  and will be disabled between the times
+#    enable  -> plugin is disabled and will be enabled  between the times
+#    disable -> plugin is enabled  and will be disabled between the times
 plugins:
   samplePlugin:
-    disableTimes:
+    type: disable
+    times:
     - 9:00-15:30
   anotherPlugin:
-    enableTimes:
+    type: enable
+    times:
     - 9:30-14:00
     - 23:50-13:00
+commands:
+  a:
+    command: say
+    arguments: A new day starts....
+    time: '00:00'
+  b:
+    command: say
+    arguments: Good night!
+    time: '23:00'
