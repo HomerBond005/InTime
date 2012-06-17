@@ -1,6 +1,8 @@
 name: InTime
 main: de.HomerBond005.InTime.InTime
 author: HomerBond005
-version: 0.2
+version: 0.3
 softdepend: [ApluginThatDontExistAndWillNeverDo]
 commands:
+    intime:
+        description: Reload InTime
