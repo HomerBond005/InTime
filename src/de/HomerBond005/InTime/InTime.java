@@ -9,6 +9,7 @@ package de.HomerBond005.InTime;
 import java.io.File;
 import java.io.IOException;
 import java.util.Calendar;
+import java.util.GregorianCalendar;
 import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
@@ -102,7 +103,7 @@ public class InTime extends JavaPlugin{
 		commands = new HashMap<String, String[]>();
 		Set<String> commandnames = getConfig().getConfigurationSection("commands").getKeys(false);
 		for(String command : commandnames){
-			String[] value = {getConfig().getString("commands." + command + ".command"), getConfig().getString("commands." + command + ".arguments", ""), getConfig().getString("commands." + command + ".time")};
+			String[] value = {getConfig().getString("commands." + command + ".command"), getConfig().getString("commands." + command + ".arguments", ""), getConfig().getString("commands." + command + ".time"), getConfig().getString("commands." + command + ".weekday", "all")};
 			commands.put(command, value);
 		}
 	}
@@ -110,14 +111,21 @@ public class InTime extends JavaPlugin{
 	//COMMANDMANAGEMENT
 	private void manageCommands(int hours, int minutes){
 		for(Entry<String, String[]> command : commands.entrySet()){
-			handleCommand(command.getValue()[0], command.getValue()[1], command.getValue()[2], hours, minutes);
+			handleCommand(command.getValue()[0], command.getValue()[1], command.getValue()[2], hours, minutes, command.getValue()[3]);
 		}
 	}
 	
-	private void handleCommand(String name, String arguments, String time, int acthours, int actminutes){
+	private void handleCommand(String name, String arguments, String time, int acthours, int actminutes, String weekday){
 		if(time.equals(t(acthours) + ":" + t(actminutes))){
-			log.log(Level.INFO, "Executing the following: '" + name + " " + arguments + "'.");
-			getServer().dispatchCommand(getServer().getConsoleSender(), name + " " + arguments);
+			if(!weekday.equalsIgnoreCase("all")){
+				if(weekday.equalsIgnoreCase(getActDay())){
+					log.log(Level.INFO, "Executing the following: '" + name + " " + arguments + "'.");
+					getServer().dispatchCommand(getServer().getConsoleSender(), name + " " + arguments);
+				}
+			}else{	
+				log.log(Level.INFO, "Executing the following: '" + name + " " + arguments + "'.");
+				getServer().dispatchCommand(getServer().getConsoleSender(), name + " " + arguments);
+			}
 		}
 	}
 	
@@ -270,5 +278,24 @@ public class InTime extends JavaPlugin{
 			}
 		}
 		return false;
+	}
+	
+	private String getActDay(){
+		int day = GregorianCalendar.getInstance().get(GregorianCalendar.DAY_OF_WEEK);
+		if(day == GregorianCalendar.MONDAY)
+			return "Monday";
+		if(day == GregorianCalendar.TUESDAY)
+			return "Tuesday";
+		if(day == GregorianCalendar.WEDNESDAY)
+			return "Wednesday";
+		if(day == GregorianCalendar.THURSDAY)
+			return "Thursday";
+		if(day == GregorianCalendar.FRIDAY)
+			return "Friday";
+		if(day == GregorianCalendar.SATURDAY)
+			return "Saturday";
+		if(day == GregorianCalendar.SUNDAY)
+			return "Sunday";
+		return "No day";
 	}
 }

@@ -1,7 +1,7 @@
 name: InTime
 main: de.HomerBond005.InTime.InTime
 author: HomerBond005
-version: 0.3
+version: 0.4
 softdepend: [ApluginThatDontExistAndWillNeverDo]
 commands:
     intime:
