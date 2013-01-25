@@ -6,64 +6,69 @@
  */
 package de.HomerBond005.InTime;
 
-import java.io.File;
 import java.io.IOException;
 import java.util.Calendar;
-import java.util.GregorianCalendar;
-import java.util.HashMap;
-import java.util.List;
-import java.util.Map;
-import java.util.Map.Entry;
+import java.util.HashSet;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 import java.util.Set;
 import org.bukkit.ChatColor;
 import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
-import org.bukkit.plugin.Plugin;
 import org.bukkit.plugin.PluginManager;
 import org.bukkit.plugin.java.JavaPlugin;
 
+import de.HomerBond005.InTime.Executable.Weekday;
+import de.HomerBond005.InTime.ExecutablePlugin.PluginType;
+
 public class InTime extends JavaPlugin{
-	private Map<String, List<String>> plugins;
-	private Map<String, String[]> commands;
+	private Set<ExecutablePlugin> plugins;
+	private Set<ExecutableCommand> commands;
 	private int task;
-	private PluginManager pm;
 	private Metrics metrics;
 	private Updater updater;
-	private Logger log;
+	protected static Logger log;
+	protected static PluginManager pm;
 	
+	@SuppressWarnings("deprecation")
 	@Override
 	public void onEnable(){
 		log = getLogger();
 		pm = getServer().getPluginManager();
-		if(!new File(getDataFolder()+File.separator+"config.yml").exists()){
-			getConfig().options().copyDefaults(true);
-			saveConfig();
-		}else{
-			getConfig().options().copyDefaults(false);
-		}
+		getConfig().options().copyDefaults(true);
+		getConfig().options().copyHeader(true);
+		saveConfig();
 		reload();
 		getServer().getScheduler().scheduleAsyncDelayedTask(this, new Runnable(){
 			public void run(){
-				initPlugins(hours(), minutes());
+				Calendar cal = Calendar.getInstance();
+		    	int h = cal.get(Calendar.HOUR_OF_DAY);
+		    	int m = cal.get(Calendar.MINUTE);
+				initPlugins(h, m);
 			}
 		});
 		task = getServer().getScheduler().scheduleAsyncRepeatingTask(this, new Runnable() {
 		    public void run() {
-		        managePlugins(hours(), minutes());
-		        manageCommands(hours(), minutes());
+		    	Calendar cal = Calendar.getInstance();
+		    	int h = cal.get(Calendar.HOUR_OF_DAY);
+		    	int m = cal.get(Calendar.MINUTE);
+		    	Weekday wd = Weekday.getByInt(cal.get(Calendar.DAY_OF_WEEK));
+		        managePlugins(h, m, wd);
+		        manageCommands(h, m, wd);
 		    }
-		}, 0L, 600L);
+		}, 0L, 1200L);
 		try{
 			metrics = new Metrics(this);
 			metrics.start();
 		}catch(IOException e){
 			log.log(Level.WARNING, "Error while enabling Metrics.");
 		}
-		updater = new Updater(this);
+		updater = new Updater(this, getConfig().getBoolean("updateReminderEnabled", true));
 		getServer().getPluginManager().registerEvents(updater, this);
-		log.log(Level.INFO, "Current time: " + t(hours()) + ":" + t(minutes()));
+		Calendar cal = Calendar.getInstance();
+    	int h = cal.get(Calendar.HOUR_OF_DAY);
+    	int m = cal.get(Calendar.MINUTE);
+		log.log(Level.INFO, "Current time: " + t(h) + ":" + t(m));
 		log.log(Level.INFO, "is enabled!");
 	}
 	
@@ -91,115 +96,43 @@ public class InTime extends JavaPlugin{
 		//PLUGINS
 		reloadConfig();
 		Set<String> pluginnames = getConfig().getConfigurationSection("plugins").getKeys(false);
-		plugins = new HashMap<String, List<String>>();
+		plugins = new HashSet<ExecutablePlugin>();
 		for(String plugin : pluginnames){
-			if(getConfig().getString("plugins." + plugin + ".type").equals("enable")){
-				plugins.put(plugin + ".enable", getConfig().getStringList("plugins." + plugin + ".times"));
+			Weekday wd = Weekday.getByName(getConfig().getString("plugins."+plugin+".weekday", "all"));
+			if(getConfig().getString("plugins." + plugin + ".type").equalsIgnoreCase("enable")){
+				plugins.add(new ExecutablePlugin(plugin, new HashSet<String>(getConfig().getStringList("plugins." + plugin + ".times")), wd, PluginType.ENABLE));
 			}else if(getConfig().getString("plugins." + plugin + ".type").equals("disable")){
-				plugins.put(plugin + ".disable", getConfig().getStringList("plugins." + plugin + ".times"));
+				plugins.add(new ExecutablePlugin(plugin, new HashSet<String>(getConfig().getStringList("plugins." + plugin + ".times")), wd, PluginType.DISABLE));
 			}
 		}
 		//COMMANDS
-		commands = new HashMap<String, String[]>();
+		commands = new HashSet<ExecutableCommand>();
 		Set<String> commandnames = getConfig().getConfigurationSection("commands").getKeys(false);
 		for(String command : commandnames){
-			String[] value = {getConfig().getString("commands." + command + ".command"), getConfig().getString("commands." + command + ".arguments", ""), getConfig().getString("commands." + command + ".time"), getConfig().getString("commands." + command + ".weekday", "all")};
-			commands.put(command, value);
+			Weekday wd = Weekday.getByName(getConfig().getString("commands."+command+".weekday", "all"));
+			commands.add(new ExecutableCommand(getConfig().getString("commands." + command + ".command"), getConfig().getString("commands." + command + ".arguments", ""), new HashSet<String>(getConfig().getStringList("commands." + command + ".times")), wd));
 		}
 	}
 	
 	//COMMANDMANAGEMENT
-	private void manageCommands(int hours, int minutes){
-		for(Entry<String, String[]> command : commands.entrySet()){
-			handleCommand(command.getValue()[0], command.getValue()[1], command.getValue()[2], hours, minutes, command.getValue()[3]);
-		}
-	}
-	
-	private void handleCommand(String name, String arguments, String time, int acthours, int actminutes, String weekday){
-		if(time.equals(t(acthours) + ":" + t(actminutes))){
-			if(!weekday.equalsIgnoreCase("all")){
-				if(weekday.equalsIgnoreCase(getActDay())){
-					log.log(Level.INFO, "Executing the following: '" + name + " " + arguments + "'.");
-					getServer().dispatchCommand(getServer().getConsoleSender(), name + " " + arguments);
-				}
-			}else{	
-				log.log(Level.INFO, "Executing the following: '" + name + " " + arguments + "'.");
-				getServer().dispatchCommand(getServer().getConsoleSender(), name + " " + arguments);
-			}
+	private void manageCommands(int hours, int minutes, Weekday wd){
+		for(ExecutableCommand command : commands){
+			command.executeIfMatches(hours, minutes, wd, "");
 		}
 	}
 	
 	//PLUGINMANAGEMENT
-	private void managePlugins(int hours, int minutes){
-		for(Entry<String, List<String>> plugin : plugins.entrySet()){
-			handlePlugin(formatPluginName(plugin.getKey()), hours, minutes);
-		}
-	}
-	
-	private void handlePlugin(String plugin, int hours, int minutes){
-		List<String> times = plugins.get(plugin + "." + getTypeOfPlugin(plugin));
-		for(String time : times){
-			String start = time.split("-")[0];
-			String end = time.split("-")[1];
-			if(getTypeOfPlugin(plugin) == "enable"){
-				if(start.equals(t(hours) + ":" + t(minutes))){
-					enablePlugin(plugin);
-				}
-				if(end.equals(t(hours) + ":" + t(minutes))){
-					disablePlugin(plugin);
-				}
-			}else if(getTypeOfPlugin(plugin) == "disable"){
-				if(start.equals(t(hours) + ":" + t(minutes))){
-					disablePlugin(plugin);
-				}
-				if(end.equals(t(hours) + ":" + t(minutes))){
-					enablePlugin(plugin);
-				}
-			}
-		}
-	}
-	
-	private String getTypeOfPlugin(String plugin){
-		if(plugins.containsKey(plugin + ".enable")){
-			return "enable";
-		}else if(plugins.containsKey(plugin + ".disable")){
-			return "disable";
-		}else{
-			return null;
-		}
-	}
-	
-	private boolean enablePlugin(String name){
-		Plugin plugin = pm.getPlugin(name);
-		if(plugin == null){
-			return false;
-		}else{
-			if(!pm.isPluginEnabled(plugin)){
-				log.log(Level.INFO, "Enabling '" + name + "'.");
-				pm.enablePlugin(plugin);
-			}
-			return true;
-		}
-	}
-	
-	private boolean disablePlugin(String name){
-		Plugin plugin = pm.getPlugin(name);
-		if(plugin == null){
-			return false;
-		}else{
-			if(pm.isPluginEnabled(plugin)){
-				log.log(Level.INFO, "Disabling '" + name + "'.");
-				pm.disablePlugin(plugin);
-			}
-			return true;
+	private void managePlugins(int hours, int minutes, Weekday wd){
+		for(ExecutablePlugin plugin : plugins){
+			plugin.executeIfMatches(hours, minutes, wd, "");
 		}
 	}
 	
 	private void initPlugins(int hours, int minutes){
-		for(Entry<String, List<String>> plugin : plugins.entrySet()){
-			if(getTypeOfPlugin(formatPluginName(plugin.getKey())) == "enable"){
+		for(ExecutablePlugin plugin : plugins){
+			if(plugin.getPluginType() == PluginType.ENABLE){
 				boolean disable = true;
-				for(String time : plugin.getValue()){
+				for(String time : plugin.times){
 					String start = time.split("-")[0];
 					String end = time.split("-")[1];
 					if(inTime(hours, minutes, Integer.parseInt(start.split(":")[0]), Integer.parseInt(start.split(":")[1]), Integer.parseInt(end.split(":")[0]), Integer.parseInt(end.split(":")[1]))){
@@ -207,11 +140,11 @@ public class InTime extends JavaPlugin{
 					}
 				}
 				if(disable){
-					disablePlugin(formatPluginName(plugin.getKey()));
+					plugin.execute("disable");
 				}
-			}else if(getTypeOfPlugin(formatPluginName(plugin.getKey())) == "disable"){
+			}else{
 				boolean enable = true;
-				for(String time : plugin.getValue()){
+				for(String time : plugin.times){
 					String start = time.split("-")[0];
 					String end = time.split("-")[1];
 					if(inTime(hours, minutes, Integer.parseInt(start.split(":")[0]), Integer.parseInt(start.split(":")[1]), Integer.parseInt(end.split(":")[0]), Integer.parseInt(end.split(":")[1]))){
@@ -219,33 +152,13 @@ public class InTime extends JavaPlugin{
 					}
 				}
 				if(!enable){
-					disablePlugin(formatPluginName(plugin.getKey()));
+					plugin.execute("disable");
 				}
 			}
 		}
 	}
 	
-	private String formatPluginName(String withType){
-		if(withType.endsWith(".enable")){
-			return withType.substring(0, withType.length() - 7);
-		}else if(withType.endsWith(".disable")){
-			return withType.substring(0, withType.length() - 8);
-		}else{
-			return withType;
-		}
-	}
-	
 	//TIME
-	private int minutes(){
-		Calendar cal = Calendar.getInstance();
-		return cal.get(Calendar.MINUTE);
-	}
-	
-	private int hours(){
-		Calendar cal = Calendar.getInstance();
-		return cal.get(Calendar.HOUR_OF_DAY);
-	}
-	
 	private String t(int t){
 		if(t < 10){
 			return "0" + t;
@@ -278,24 +191,5 @@ public class InTime extends JavaPlugin{
 			}
 		}
 		return false;
-	}
-	
-	private String getActDay(){
-		int day = GregorianCalendar.getInstance().get(GregorianCalendar.DAY_OF_WEEK);
-		if(day == GregorianCalendar.MONDAY)
-			return "Monday";
-		if(day == GregorianCalendar.TUESDAY)
-			return "Tuesday";
-		if(day == GregorianCalendar.WEDNESDAY)
-			return "Wednesday";
-		if(day == GregorianCalendar.THURSDAY)
-			return "Thursday";
-		if(day == GregorianCalendar.FRIDAY)
-			return "Friday";
-		if(day == GregorianCalendar.SATURDAY)
-			return "Saturday";
-		if(day == GregorianCalendar.SUNDAY)
-			return "Sunday";
-		return "No day";
 	}
 }
