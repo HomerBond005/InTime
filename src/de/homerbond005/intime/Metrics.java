@@ -1,4 +1,4 @@
-package de.HomerBond005.InTime;
+package de.homerbond005.intime;
 /*
  * Copyright 2011 Tyler Blair. All rights reserved.
  *
