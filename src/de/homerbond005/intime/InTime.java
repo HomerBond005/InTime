@@ -18,6 +18,7 @@ import org.bukkit.command.Command;
 import org.bukkit.command.CommandSender;
 import org.bukkit.plugin.java.JavaPlugin;
 import org.bukkit.scheduler.BukkitTask;
+import org.mcstats.Metrics;
 
 import de.homerbond005.intime.Executable.Weekday;
 import de.homerbond005.intime.ExecutablePlugin.PluginType;

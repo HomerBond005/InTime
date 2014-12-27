@@ -5,7 +5,7 @@
 
 	<groupId>de.homerbond005</groupId>
 	<artifactId>intime</artifactId>
-	<version>1.1</version>
+	<version>1.1.1</version>
 	<name>InTime</name>
 
 	<repositories>
